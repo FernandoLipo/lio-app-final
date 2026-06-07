@@ -17,6 +17,12 @@ android.accept_sdk_license = True
 android.skip_update = False
 log_level = 2
 
+# Forzamos las versiones de las herramientas de Android para evitar que use las de GitHub
+android.api = 33
+android.minapi = 24
+android.ndk = 25.2.9519653
+android.ndk_api = 24
+
 [buildozer]
 log_level = 2
 warn_on_root = 1
