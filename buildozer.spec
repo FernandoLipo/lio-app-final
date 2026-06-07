@@ -17,10 +17,10 @@ android.accept_sdk_license = True
 android.skip_update = False
 log_level = 2
 
-# Forzamos las versiones de las herramientas de Android para evitar que use las de GitHub
+# Forzamos la versión recomendada por el sistema que sí existe para descargar
 android.api = 33
 android.minapi = 24
-android.ndk = 25.2.9519653
+android.ndk = r28c
 android.ndk_api = 24
 
 [buildozer]
