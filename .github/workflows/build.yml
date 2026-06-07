@@ -29,12 +29,11 @@ jobs:
         pip3 install --upgrade pip
         pip3 install buildozer cython virtualenv
 
-    - name: Aceptar licencias de Android SDK de forma segura
+    - name: Limpiar NDK incompatible de GitHub
       run: |
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        # Esto le avisa a Buildozer que ya aceptamos los términos de antemano
-        echo "y" | y_or_n=y buildozer android sdk_update || true
+        # Esto elimina la versión 27 del servidor que nos arruinaba la compilación
+        sudo rm -rf /usr/local/lib/android/sdk/ndk
+        sudo rm -rf /usr/local/lib/android/sdk/ndk-bundle
 
     - name: Compilar APK con Buildozer
       run: |
