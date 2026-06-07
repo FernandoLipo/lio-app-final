@@ -17,11 +17,9 @@ android.accept_sdk_license = True
 android.skip_update = False
 log_level = 2
 
-# Forzamos la versión recomendada por el sistema que sí existe para descargar
+# Dejamos que el sistema elija el NDK oficial automáticamente
 android.api = 33
 android.minapi = 24
-android.ndk = r28c
-android.ndk_api = 24
 
 [buildozer]
 log_level = 2
