@@ -1,0 +1,42 @@
+name: Compilar APK LioApp
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Recordar codigo del repositorio
+      uses: actions/checkout@v3
+
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Configurar entorno Java JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Instalar dependencias del sistema de Linux
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libsqlite3-dev python3-pip build-essential ccache git libffi-dev libssl-dev unp
+        pip3 install --upgrade pip
+        pip3 install buildozer cython virtualenv
+
+    - name: Compilar APK con Buildozer
+      run: |
+        yes | buildozer android debug
+      env:
+        ACCEPT_SDK_LICENSE: "true"
+
+    - name: Guardar el instalador APK finalizado
+      uses: actions/upload-artifact@v4
+      with:
+        name: LioApp-Instalador
+        path: bin/*.apk
