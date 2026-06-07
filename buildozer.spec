@@ -6,7 +6,6 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
-# Usamos sqlite3 y pillow para tu lista en formato imagen
 requirements = python3,kivy,sqlite3,pillow
 
 orientation = portrait
@@ -17,7 +16,6 @@ android.accept_sdk_license = True
 android.skip_update = False
 log_level = 2
 
-# Dejamos que el sistema elija el NDK oficial automáticamente
 android.api = 33
 android.minapi = 24
 
