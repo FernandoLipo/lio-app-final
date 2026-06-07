@@ -29,9 +29,16 @@ jobs:
         pip3 install --upgrade pip
         pip3 install buildozer cython virtualenv
 
+    - name: Aceptar licencias de Android SDK de forma segura
+      run: |
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        # Esto le avisa a Buildozer que ya aceptamos los términos de antemano
+        echo "y" | y_or_n=y buildozer android sdk_update || true
+
     - name: Compilar APK con Buildozer
       run: |
-        yes | buildozer android debug
+        buildozer android debug
       env:
         ACCEPT_SDK_LICENSE: "true"
 
