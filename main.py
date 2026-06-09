@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 class PantallaPrincipal(Screen):
     def __init__(self, **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
         
         ruta_app = App.get_running_app().user_data_dir
         self.base_datos = os.path.join(ruta_app, "lio_limpieza.db")
@@ -154,12 +154,13 @@ class PantallaPrincipal(Screen):
     def ir_a_lista(self, instance):
         self.manager.current = 'lista'
 
+
 class PantallaLista(Screen):
     def on_enter(self):
         self.generar_foto_lista()
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
 
         layout.add_widget(Label(text="VISTA PREVIA DE TU LISTA", font_size='22sp', bold=True, size_hint_y=None, height=dp(40)))
@@ -179,7 +180,7 @@ class PantallaLista(Screen):
         btn_volver.bind(on_release=self.volver)
         layout_acciones.add_widget(btn_volver)
 
-        btn_compartir = Button(text="COMPARTIR", font_size='16sp', bold=True, background_color=(0.1, 0.6, 0.2, 1))
+        btn_compartir = Button(text="COMPARTIR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.6, 0.2, 1))
         btn_compartir.bind(on_release=self.compartir_lista)
         layout_acciones.add_widget(btn_compartir)
         
@@ -198,35 +199,45 @@ class PantallaLista(Screen):
             conn.close()
 
             ancho = 720
-            alto = 200 + (len(items) * 45) if items else 400
+            alto = 220 + (len(items) * 50) if items else 400
             
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
 
-            lienzo.text((40, 30), "LISTA DE PRECIOS", fill="black")
-            lienzo.text((40, 70), "PEDIDOS WHATSAPP: 1123017122", fill="black")
-            lienzo.line([(40, 110), (680, 110)], fill="black", width=2)
+            # Carga de fuente del sistema nativa en Android para que se lea grande y claro
+            try:
+                fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 36)
+                fuente_texto = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 26)
+            except:
+                fuente_titulo = ImageFont.load_default()
+                fuente_texto = ImageFont.load_default()
 
-            lienzo.text((40, 130), "PRODUCTO", fill="black")
-            lienzo.text((580, 130), "PRECIO", fill="black")
-            lienzo.line([(40, 160), (680, 160)], fill="grey", width=1)
+            lienzo.text((40, 30), "LISTA DE PRECIOS", fill="black", font=fuente_titulo)
+            lienzo.text((40, 80), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_texto)
+            lienzo.line([(40, 130), (680, 130)], fill="black", width=3)
 
-            y = 180
+            lienzo.text((40, 145), "PRODUCTO", fill="black", font=fuente_texto)
+            lienzo.text((540, 145), "PRECIO", fill="black", font=fuente_texto)
+            lienzo.line([(40, 185), (680, 185)], fill="grey", width=2)
+
+            y = 205
             for prod, precio in items:
-                lienzo.text((40, y), str(prod), fill="black")
-                lienzo.text((580, y), f"${precio:,.2f}", fill="black")
-                y += 45
+                lienzo.text((40, y), str(prod), fill="black", font=fuente_texto)
+                lienzo.text((540, y), f"${precio:,.2f}", fill="black", font=fuente_texto)
+                y += 50
 
-            from android.storage import primary_external_storage_path
-            path_publico = primary_external_storage_path()
-            self.ruta_final_foto = os.path.join(path_publico, "Download", "Lista_Precios_Lio.png")
+            # Ruta limpia para guardar en la carpeta publica de Descargas del celu
+            try:
+                from android.storage import primary_external_storage_path
+                path_publico = primary_external_storage_path()
+                self.ruta_final_foto = os.path.join(path_publico, "Download", "Lista_Precios_Lio.png")
+            except:
+                self.ruta_final_foto = os.path.join(ruta_app, "Lista_Precios_Lio.png")
+
             imagen.save(self.ruta_final_foto)
-            self.lbl_info.text = "Lista de Precios\nPedidos WhatsApp: 1123017122\n\n¡Guardada en Descargas!"
+            self.lbl_info.text = "Lista de Precios\nPedidos WhatsApp: 1123017122\n\n¡Guardada en la carpeta Descargas!"
         except Exception as e:
-            ruta_local = os.path.join(App.get_running_app().user_data_dir, "Lista_Precios.png")
-            imagen.save(ruta_local)
-            self.ruta_final_foto = ruta_local
-            self.lbl_info.text = f"Foto guardada localmente."
+            self.lbl_info.text = f"Error al generar foto: {str(e)}"
 
     def compartir_lista(self, instance):
         try:
@@ -238,15 +249,18 @@ class PantallaLista(Screen):
             archivo_foto = File(self.ruta_final_foto)
             intent = Intent(Intent.ACTION_SEND)
             intent.setType("image/png")
+            
+            # Modo seguro para parsear la URI y evitar fallos de seguridad en Android modernos
             intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(archivo_foto))
             
             current_activity = autoclass('org.kivy.android.PythonActivity').mActivity
             current_activity.startActivity(Intent.createChooser(intent, "Compartir Lista via..."))
-        except:
-            self.lbl_info.text = "Compartir requiere ejecucion en Android."
+        except Exception as e:
+            self.lbl_info.text = "Guardada en la carpeta 'Descargas' del teléfono."
 
     def volver(self, instance):
         self.manager.current = 'principal'
+
 
 class LioLimpiezaApp(App):
     def build(self):
