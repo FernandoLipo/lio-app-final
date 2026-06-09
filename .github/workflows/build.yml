@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Recordar codigo del repositorio
@@ -25,18 +25,19 @@ jobs:
     - name: Instalar dependencias del sistema de Linux
       run: |
         sudo apt-get update
-        sudo apt-get install -y libsqlite3-dev python3-pip build-essential ccache git libffi-dev libssl-dev unp
+        sudo apt-get install -y libsqlite3-dev python3-pip build-essential ccache git libffi-dev libssl-dev unp zip unzip
         pip3 install --upgrade pip
-        pip3 install buildozer cython virtualenv
+        # Forzamos una version de buildozer que no tiene el error del broken pipe
+        pip3 install "buildozer==1.5.0" cython virtualenv
 
-    - name: Limpiar NDK incompatible de GitHub
+    - name: Limpiar herramientas en conflicto
       run: |
-        # Esto elimina la versión 27 del servidor que nos arruinaba la compilación
         sudo rm -rf /usr/local/lib/android/sdk/ndk
         sudo rm -rf /usr/local/lib/android/sdk/ndk-bundle
 
     - name: Compilar APK con Buildozer
       run: |
+        # Usamos el comando nativo de buildozer para empaquetar y aceptar licencias de forma segura
         buildozer android debug
       env:
         ACCEPT_SDK_LICENSE: "true"
