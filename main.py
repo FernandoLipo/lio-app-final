@@ -6,6 +6,7 @@ from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.popup import Popup
 from kivy.metrics import dp
 import sqlite3
 import os
@@ -81,25 +82,60 @@ class PantallaPrincipal(Screen):
 
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, precio FROM productos WHERE nombre LIKE ? COLLATE NOCASE", (f"%{criterio}%",))
-        resultado = cursor.fetchone()
+        # Buscamos coincidencias en cualquier parte del texto
+        cursor.execute("SELECT nombre, precio FROM productos WHERE nombre LIKE ? COLLATE NOCASE ORDER BY nombre ASC", (f"%{criterio}%",))
+        resultados = cursor.fetchall()
         conn.close()
 
-        if resultado:
-            self.input_nombre.text = resultado[0]
-            self.input_precio.text = str(resultado[1])
-            self.lbl_estado.text = "Producto encontrado."
-            self.btn_guardar.disabled = True
-            self.btn_editar.disabled = False
-            self.btn_borrar.disabled = False
-            self.input_buscar.text = ""
-        else:
+        if not resultados:
             self.input_nombre.text = criterio
             self.input_precio.text = ""
             self.lbl_estado.text = "No existe. Podes crearlo con ese nombre."
             self.btn_guardar.disabled = False
             self.btn_editar.disabled = True
             self.btn_borrar.disabled = True
+        elif len(resultados) == 1:
+            # Si hay uno solo, lo clava directo como antes
+            self.cargar_producto_en_campos(resultados[0][0], resultados[0][1])
+        else:
+            # Si hay más de uno, abre la ventana flotante para elegir
+            self.mostrar_popup_coincidencias(resultados)
+
+    def mostrar_popup_coincidencias(self, coincidencias):
+        layout_popup = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
+        scroll = ScrollView(size_hint=(1, 1))
+        lista_botones = BoxLayout(orientation='vertical', spacing=dp(5), size_hint_y=None)
+        lista_botones.bind(minimum_height=lista_botones.setter('height'))
+
+        popup = Popup(title='Selecciona el producto correcto', content=layout_popup, size_hint=(0.9, 0.7), auto_dismiss=True)
+
+        for nombre, precio in coincidencias:
+            btn_prod = Button(text=f"{nombre}  -  ${precio:,.2f}", size_hint_y=None, height=dp(45), halign='left', text_size=(dp(250), None))
+            # Usamos un truco de Kivy para pasarle el producto seleccionado al botón
+            btn_prod.bind(on_release=lambda instance, n=nombre, p=precio: self.seleccionar_desde_popup(n, p, popup))
+            lista_botones.add_widget(btn_prod)
+
+        scroll.add_widget(lista_botones)
+        layout_popup.add_widget(scroll)
+        
+        btn_cerrar = Button(text="CANCELAR", size_hint_y=None, height=dp(45), background_color=(0.6, 0.1, 0.1, 1))
+        btn_cerrar.bind(on_release=popup.dismiss)
+        layout_popup.add_widget(btn_cerrar)
+        
+        popup.open()
+
+    def seleccionar_desde_popup(self, nombre, precio, popup):
+        self.cargar_producto_en_campos(nombre, precio)
+        popup.dismiss()
+
+    def cargar_producto_en_campos(self, nombre, precio):
+        self.input_nombre.text = nombre
+        self.input_precio.text = str(precio)
+        self.lbl_estado.text = "Producto encontrado."
+        self.btn_guardar.disabled = True
+        self.btn_editar.disabled = False
+        self.btn_borrar.disabled = False
+        self.input_buscar.text = ""
 
     def guardar_producto(self, instance):
         nombre = self.input_nombre.text.strip()
@@ -234,11 +270,8 @@ class PantallaLista(Screen):
                 self.lbl_aviso.text = "No hay productos para exportar."
                 return
 
-            # Configuración de márgenes horizontales optimizados (Columnas más juntas, no tan al margen)
             margen_izq = 80
             margen_der = 640
-            
-            # Espaciado vertical reducido a la mitad (26 píxeles en lugar de 55)
             separacion_y = 26
             
             ancho = 720
@@ -246,10 +279,9 @@ class PantallaLista(Screen):
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
 
-            # Carga de fuentes del sistema
             try:
-                fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 78) # El triple de tamaño (26 * 3)
-                fuente_subtitulo_wp = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 52) # El doble de tamaño (26 * 2)
+                fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 78)
+                fuente_subtitulo_wp = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 52)
                 fuente_texto_bold = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 26)
                 fuente_texto = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 26)
             except:
@@ -258,18 +290,15 @@ class PantallaLista(Screen):
                 fuente_texto_bold = ImageFont.load_default()
                 fuente_texto = ImageFont.load_default()
 
-            # 1) TÍTULO CENTRADO "LISTA DE PRECIOS"
             texto_titulo = "LISTA DE PRECIOS"
             try:
-                # Calculamos el ancho exacto del texto para centrarlo perfecto
                 bbox = lienzo.textbbox((0, 0), texto_titulo, font=fuente_titulo)
                 ancho_texto = bbox[2] - bbox[0]
             except:
-                ancho_texto = 500  # Fallback estimado
+                ancho_texto = 500
             x_centrado = (ancho - ancho_texto) // 2
             lienzo.text((x_centrado, 25), texto_titulo, fill="black", font=fuente_titulo)
 
-            # FECHA DE EXPORTACIÓN (Margen derecho, tamaño estándar)
             fecha_actual = datetime.now().strftime("%d/%m/%Y")
             texto_fecha = f"Fecha: {fecha_actual}"
             try:
@@ -279,13 +308,9 @@ class PantallaLista(Screen):
                 ancho_fecha = 150
             lienzo.text((margen_der - ancho_fecha, 115), texto_fecha, fill="black", font=fuente_texto)
 
-            # PEDIDOS WHATSAPP (Misma ubicación, doble de tamaño)
             lienzo.text((margen_izq, 115), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_subtitulo_wp)
-            
-            # Línea divisoria superior
             lienzo.line([(margen_izq, 185), (margen_der, 185)], fill="black", width=3)
 
-            # 3) SUBTÍTULOS DE COLUMNAS (ARTICULOS y PRECIOS)
             lienzo.text((margen_izq, 195), "ARTICULOS", fill="black", font=fuente_texto_bold)
             
             texto_sub_precio = "PRECIOS"
@@ -296,16 +321,12 @@ class PantallaLista(Screen):
                 ancho_sp = 100
             lienzo.text((margen_der - ancho_sp, 195), texto_sub_precio, fill="black", font=fuente_texto_bold)
             
-            # Línea divisoria de subtítulos
             lienzo.line([(margen_izq, 230), (margen_der, 230)], fill="grey", width=2)
 
-            # 2) y 4) LISTADO DE PRODUCTOS (Espacio compacto y columnas centradas un poco más hacia adentro)
             y = 245
             for prod, precio in items:
-                # Nombre del artículo
                 lienzo.text((margen_izq, y), str(prod), fill="black", font=fuente_texto)
                 
-                # Precio alineado a la derecha
                 texto_precio = f"${precio:,.2f}"
                 try:
                     bbox_p = lienzo.textbbox((0, 0), texto_precio, font=fuente_texto)
@@ -316,10 +337,8 @@ class PantallaLista(Screen):
                 
                 y += separacion_y
 
-            # Línea de cierre inferior
             lienzo.line([(margen_izq, y + 10), (margen_der, y + 10)], fill="grey", width=2)
 
-            # Guardado e inserción en galería nativa
             ruta_app = App.get_running_app().user_data_dir
             temp_path = os.path.join(ruta_app, "temp_lista.png")
             imagen.save(temp_path)
