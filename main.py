@@ -74,7 +74,7 @@ class PantallaPrincipal(Screen):
 
     def buscar_producto(self, instance):
         criterio = self.input_buscar.text.strip()
-        if not criterio:
+        if not criterion:
             self.lbl_estado.text = "Ingresa un nombre para buscar."
             return
 
@@ -93,7 +93,7 @@ class PantallaPrincipal(Screen):
             self.btn_borrar.disabled = False
             self.input_buscar.text = ""
         else:
-            self.input_nombre.text = criterion
+            self.input_nombre.text = criterio
             self.input_precio.text = ""
             self.lbl_estado.text = "No existe. Podes crearlo con ese nombre."
             self.btn_guardar.disabled = False
@@ -195,7 +195,7 @@ class PantallaLista(Screen):
         layout_acciones.add_widget(btn_volver)
 
         btn_exportar_imagen = Button(text="EXPORTAR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.4, 0.1, 1))
-        btn_exportar_imagen.bind(on_release=self.exportar_como_imagen)
+        btn_exportar_imagen.bind(on_release=self.exportar_a_galeria_nativa)
         layout_acciones.add_widget(btn_exportar_imagen)
         
         self.layout_principal.add_widget(layout_acciones)
@@ -226,16 +226,16 @@ class PantallaLista(Screen):
             fila.add_widget(Label(text=f"${precio:,.2f}", font_size='16sp', halign='right', text_size=(dp(100), None)))
             self.layout_productos.add_widget(fila)
 
-    def exportar_como_imagen(self, instance):
+    def exportar_a_galeria_nativa(self, instance):
         try:
             items = self.obtener_items()
             if not items:
                 self.lbl_aviso.text = "No hay productos para exportar."
                 return
 
+            # 1. Dibujamos la imagen limpia con Pillow
             ancho = 720
             alto = 240 + (len(items) * 55)
-            
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
 
@@ -256,34 +256,35 @@ class PantallaLista(Screen):
                 lienzo.text((540, y), f"${precio:,.2f}", fill="black", font=fuente_texto)
                 y += 55
 
-            lienzo.line([(40, y + 10), (680, y + 10)], fill="grey", width=2)
-
-            # Guardamos la foto en la carpeta interna de la app (Cero bloqueos de Android)
+            # Guardado temporal interno
             ruta_app = App.get_running_app().user_data_dir
-            ruta_final = os.path.join(ruta_app, "Lista_Precios_Lio.png")
-            imagen.save(ruta_final)
-            
-            # Llamamos al sistema compartir para ofrecer guardarlo o enviarlo al toque
+            temp_path = os.path.join(ruta_app, "temp_lista.png")
+            imagen.save(temp_path)
+
+            # 2. Inyección forzada en la Galería usando MediaStore (Nativo Android sin permisos externos)
             from jnius import autoclass
-            File = autoclass('java.io.File')
-            Intent = autoclass('android.content.Intent')
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            current_activity = PythonActivity.mActivity
+            Context = autoclass('android.content.Context')
+            BitmapFactory = autoclass('android.graphics.BitmapFactory')
+            MediaStore_Images_Media = autoclass('android.provider.MediaStore$Images$Media')
             
-            archivo_foto = File(ruta_final)
-            paquete = current_activity.getPackageName()
-            FileProvider = autoclass('androidx.core.content.FileProvider')
-            uri_segura = FileProvider.getUriForFile(current_activity, f"{paquete}.fileprovider", archivo_foto)
+            actividad = PythonActivity.mActivity
+            contenido_resolver = actividad.getContentResolver()
             
-            intent = Intent(Intent.ACTION_SEND)
-            intent.setType("image/png")
-            intent.putExtra(Intent.EXTRA_STREAM, uri_segura)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            # Decodificamos el archivo temporal como un Bitmap de Android
+            bitmap = BitmapFactory.decodeFile(temp_path)
             
-            current_activity.startActivity(Intent.createChooser(intent, "Guardar o Enviar Imagen..."))
-            self.lbl_aviso.text = "¡Imagen generada!"
+            # Insertamos directamente en el carrete del sistema público
+            MediaStore_Images_Media.insertImage(
+                contenido_resolver, 
+                bitmap, 
+                "Lista_Precios_Lio", 
+                "Lista de precios generada desde LioApp"
+            )
+            
+            self.lbl_aviso.text = "¡Guardada en la Galería de Fotos!"
         except Exception as e:
-            self.lbl_aviso.text = "Error al exportar."
+            self.lbl_aviso.text = "Error al guardar en Galería."
 
     def volver(self, instance):
         self.manager.current = 'principal'
