@@ -10,6 +10,7 @@ from kivy.metrics import dp
 import sqlite3
 import os
 from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime
 
 class PantallaPrincipal(Screen):
     def __init__(self, **kwargs):
@@ -74,7 +75,7 @@ class PantallaPrincipal(Screen):
 
     def buscar_producto(self, instance):
         criterio = self.input_buscar.text.strip()
-        if not criterion:
+        if not criterio:
             self.lbl_estado.text = "Ingresa un nombre para buscar."
             return
 
@@ -233,48 +234,105 @@ class PantallaLista(Screen):
                 self.lbl_aviso.text = "No hay productos para exportar."
                 return
 
-            # 1. Dibujamos la imagen limpia con Pillow
+            # Configuración de márgenes horizontales optimizados (Columnas más juntas, no tan al margen)
+            margen_izq = 80
+            margen_der = 640
+            
+            # Espaciado vertical reducido a la mitad (26 píxeles en lugar de 55)
+            separacion_y = 26
+            
             ancho = 720
-            alto = 240 + (len(items) * 55)
+            alto = 280 + (len(items) * separacion_y)
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
 
+            # Carga de fuentes del sistema
             try:
-                fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 36)
+                fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 78) # El triple de tamaño (26 * 3)
+                fuente_subtitulo_wp = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 52) # El doble de tamaño (26 * 2)
+                fuente_texto_bold = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 26)
                 fuente_texto = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 26)
             except:
                 fuente_titulo = ImageFont.load_default()
+                fuente_subtitulo_wp = ImageFont.load_default()
+                fuente_texto_bold = ImageFont.load_default()
                 fuente_texto = ImageFont.load_default()
 
-            lienzo.text((40, 30), "LIO LIMPIEZA - LISTA DE PRECIOS", fill="black", font=fuente_titulo)
-            lienzo.text((40, 85), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_texto)
-            lienzo.line([(40, 135), (680, 135)], fill="black", width=3)
+            # 1) TÍTULO CENTRADO "LISTA DE PRECIOS"
+            texto_titulo = "LISTA DE PRECIOS"
+            try:
+                # Calculamos el ancho exacto del texto para centrarlo perfecto
+                bbox = lienzo.textbbox((0, 0), texto_titulo, font=fuente_titulo)
+                ancho_texto = bbox[2] - bbox[0]
+            except:
+                ancho_texto = 500  # Fallback estimado
+            x_centrado = (ancho - ancho_texto) // 2
+            lienzo.text((x_centrado, 25), texto_titulo, fill="black", font=fuente_titulo)
 
-            y = 160
+            # FECHA DE EXPORTACIÓN (Margen derecho, tamaño estándar)
+            fecha_actual = datetime.now().strftime("%d/%m/%Y")
+            texto_fecha = f"Fecha: {fecha_actual}"
+            try:
+                bbox_f = lienzo.textbbox((0, 0), texto_fecha, font=fuente_texto)
+                ancho_fecha = bbox_f[2] - bbox_f[0]
+            except:
+                ancho_fecha = 150
+            lienzo.text((margen_der - ancho_fecha, 115), texto_fecha, fill="black", font=fuente_texto)
+
+            # PEDIDOS WHATSAPP (Misma ubicación, doble de tamaño)
+            lienzo.text((margen_izq, 115), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_subtitulo_wp)
+            
+            # Línea divisoria superior
+            lienzo.line([(margen_izq, 185), (margen_der, 185)], fill="black", width=3)
+
+            # 3) SUBTÍTULOS DE COLUMNAS (ARTICULOS y PRECIOS)
+            lienzo.text((margen_izq, 195), "ARTICULOS", fill="black", font=fuente_texto_bold)
+            
+            texto_sub_precio = "PRECIOS"
+            try:
+                bbox_sp = lienzo.textbbox((0, 0), texto_sub_precio, font=fuente_texto_bold)
+                ancho_sp = bbox_sp[2] - bbox_sp[0]
+            except:
+                ancho_sp = 100
+            lienzo.text((margen_der - ancho_sp, 195), texto_sub_precio, fill="black", font=fuente_texto_bold)
+            
+            # Línea divisoria de subtítulos
+            lienzo.line([(margen_izq, 230), (margen_der, 230)], fill="grey", width=2)
+
+            # 2) y 4) LISTADO DE PRODUCTOS (Espacio compacto y columnas centradas un poco más hacia adentro)
+            y = 245
             for prod, precio in items:
-                lienzo.text((40, y), str(prod), fill="black", font=fuente_texto)
-                lienzo.text((540, y), f"${precio:,.2f}", fill="black", font=fuente_texto)
-                y += 55
+                # Nombre del artículo
+                lienzo.text((margen_izq, y), str(prod), fill="black", font=fuente_texto)
+                
+                # Precio alineado a la derecha
+                texto_precio = f"${precio:,.2f}"
+                try:
+                    bbox_p = lienzo.textbbox((0, 0), texto_precio, font=fuente_texto)
+                    ancho_p = bbox_p[2] - bbox_p[0]
+                except:
+                    ancho_p = 80
+                lienzo.text((margen_der - ancho_p, y), texto_precio, fill="black", font=fuente_texto)
+                
+                y += separacion_y
 
-            # Guardado temporal interno
+            # Línea de cierre inferior
+            lienzo.line([(margen_izq, y + 10), (margen_der, y + 10)], fill="grey", width=2)
+
+            # Guardado e inserción en galería nativa
             ruta_app = App.get_running_app().user_data_dir
             temp_path = os.path.join(ruta_app, "temp_lista.png")
             imagen.save(temp_path)
 
-            # 2. Inyección forzada en la Galería usando MediaStore (Nativo Android sin permisos externos)
             from jnius import autoclass
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Context = autoclass('android.content.Context')
             BitmapFactory = autoclass('android.graphics.BitmapFactory')
             MediaStore_Images_Media = autoclass('android.provider.MediaStore$Images$Media')
             
             actividad = PythonActivity.mActivity
             contenido_resolver = actividad.getContentResolver()
-            
-            # Decodificamos el archivo temporal como un Bitmap de Android
             bitmap = BitmapFactory.decodeFile(temp_path)
             
-            # Insertamos directamente en el carrete del sistema público
             MediaStore_Images_Media.insertImage(
                 contenido_resolver, 
                 bitmap, 
