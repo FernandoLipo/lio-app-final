@@ -59,7 +59,7 @@ class PantallaPrincipal(Screen):
         layout_edicion.add_widget(self.btn_borrar)
         layout.add_widget(layout_edicion)
 
-        btn_exportar = Button(text="EXPORTAR LISTA DE PRECIOS", font_size='16sp', bold=True, size_hint_y=None, height=dp(50))
+        btn_exportar = Button(text="VER LISTA DE PRECIOS", font_size='16sp', bold=True, size_hint_y=None, height=dp(50))
         btn_exportar.bind(on_release=self.ir_a_lista)
         layout.add_widget(btn_exportar)
 
@@ -80,7 +80,6 @@ class PantallaPrincipal(Screen):
 
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        # Buscador potente: Encuentra coincidencias parciales sin importar mayusculas
         cursor.execute("SELECT nombre, precio FROM productos WHERE nombre LIKE ? COLLATE NOCASE", (f"%{criterio}%",))
         resultado = cursor.fetchone()
         conn.close()
@@ -92,6 +91,8 @@ class PantallaPrincipal(Screen):
             self.btn_guardar.disabled = True
             self.btn_editar.disabled = False
             self.btn_borrar.disabled = False
+            # Modificación: Limpiar buscador automáticamente al encontrar
+            self.input_buscar.text = ""
         else:
             self.input_nombre.text = criterio
             self.input_precio.text = ""
@@ -114,8 +115,9 @@ class PantallaPrincipal(Screen):
             conn.commit()
             conn.close()
             self.lbl_estado.text = "Producto guardado con éxito."
-            self.input_buscar.text = nombre
-            self.buscar_producto(None)
+            self.input_buscar.text = ""
+            self.input_nombre.text = ""
+            self.input_precio.text = ""
         except Exception as e:
             self.lbl_estado.text = "Error al guardar: El producto ya existe."
 
@@ -133,6 +135,9 @@ class PantallaPrincipal(Screen):
         conn.commit()
         conn.close()
         self.lbl_estado.text = "Precio modificado correctamente."
+        self.input_buscar.text = ""
+        self.input_nombre.text = ""
+        self.input_precio.text = ""
 
     def borrar_producto(self, instance):
         nombre = self.input_nombre.text.strip()
@@ -158,9 +163,7 @@ class PantallaPrincipal(Screen):
 
 class PantallaLista(Screen):
     def on_enter(self):
-        # Actualiza tanto la vista interna como el archivo de imagen al entrar
         self.cargar_vista_previa_texto()
-        self.generar_foto_lista()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -177,12 +180,14 @@ class PantallaLista(Screen):
         )
         self.layout_principal.add_widget(self.lbl_encabezado)
 
-        # Contenedor con scroll dinámico para ver todos los productos en pantalla
         self.scroll = ScrollView(size_hint=(1, 1))
         self.layout_productos = BoxLayout(orientation='vertical', spacing=dp(8), size_hint_y=None)
         self.layout_productos.bind(minimum_height=self.layout_productos.setter('height'))
         self.scroll.add_widget(self.layout_productos)
         self.layout_principal.add_widget(self.scroll)
+
+        self.lbl_aviso = Label(text="", font_size='14sp', color=(0, 1, 0, 1), size_hint_y=None, height=dp(25))
+        self.layout_principal.add_widget(self.lbl_aviso)
 
         layout_acciones = BoxLayout(orientation='horizontal', spacing=dp(15), size_hint_y=None, height=dp(50))
         
@@ -190,9 +195,10 @@ class PantallaLista(Screen):
         btn_volver.bind(on_release=self.volver)
         layout_acciones.add_widget(btn_volver)
 
-        btn_compartir = Button(text="COMPARTIR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.4, 0.1, 1))
-        btn_compartir.bind(on_release=self.compartir_lista)
-        layout_acciones.add_widget(btn_compartir)
+        # Modificación: Reemplazar Compartir por EXPORTAR LISTA
+        btn_exportar_imagen = Button(text="EXPORTAR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.4, 0.1, 1))
+        btn_exportar_imagen.bind(on_release=self.exportar_como_imagen)
+        layout_acciones.add_widget(btn_exportar_imagen)
         
         self.layout_principal.add_widget(layout_acciones)
         self.add_widget(self.layout_principal)
@@ -209,6 +215,7 @@ class PantallaLista(Screen):
 
     def cargar_vista_previa_texto(self):
         self.layout_productos.clear_widgets()
+        self.lbl_aviso.text = ""
         items = self.obtener_items()
         
         if not items:
@@ -221,11 +228,15 @@ class PantallaLista(Screen):
             fila.add_widget(Label(text=f"${precio:,.2f}", font_size='16sp', halign='right', text_size=(dp(100), None)))
             self.layout_productos.add_widget(fila)
 
-    def generar_foto_lista(self):
+    def exportar_como_imagen(self, instance):
         try:
             items = self.obtener_items()
+            if not items:
+                self.lbl_aviso.text = "No hay productos para exportar."
+                return
+
             ancho = 720
-            alto = 220 + (len(items) * 50) if items else 400
+            alto = 240 + (len(items) * 55)
             
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
@@ -237,53 +248,35 @@ class PantallaLista(Screen):
                 fuente_titulo = ImageFont.load_default()
                 fuente_texto = ImageFont.load_default()
 
-            lienzo.text((40, 30), "LISTA DE PRECIOS", fill="black", font=fuente_titulo)
-            lienzo.text((40, 80), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_texto)
-            lienzo.line([(40, 130), (680, 130)], fill="black", width=3)
+            lienzo.text((40, 30), "LIO LIMPIEZA - LISTA DE PRECIOS", fill="black", font=fuente_titulo)
+            lienzo.text((40, 85), "PEDIDOS WHATSAPP: 1123017122", fill="green", font=fuente_texto)
+            lienzo.line([(40, 135), (680, 135)], fill="black", width=3)
 
-            lienzo.text((40, 145), "PRODUCTO", fill="black", font=fuente_texto)
-            lienzo.text((540, 145), "PRECIO", fill="black", font=fuente_texto)
-            lienzo.line([(40, 185), (680, 185)], fill="grey", width=2)
-
-            y = 205
+            y = 160
             for prod, precio in items:
                 lienzo.text((40, y), str(prod), fill="black", font=fuente_texto)
                 lienzo.text((540, y), f"${precio:,.2f}", fill="black", font=fuente_texto)
-                y += 50
+                y += 55
 
-            ruta_app = App.get_running_app().user_data_dir
-            self.ruta_final_foto = os.path.join(ruta_app, "Lista_Precios_Lio.png")
-            imagen.save(self.ruta_final_foto)
-        except:
-            pass
+            lienzo.line([(40, y + 10), (680, y + 10)], fill="grey", width=2)
 
-    def compartir_lista(self, instance):
-        try:
-            from jnius import autoclass
-            
-            # Clases nativas de Android necesarias para compartir de manera segura
-            Intent = autoclass('android.content.Intent')
-            File = autoclass('java.io.File')
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            current_activity = PythonActivity.mActivity
-            
-            archivo_foto = File(self.ruta_final_foto)
-            
-            # Usamos el FileProvider oficial de la app compilada para evitar brechas de seguridad
-            paquete = current_activity.getPackageName()
-            FileProvider = autoclass('androidx.core.content.FileProvider')
-            uri_segura = FileProvider.getUriForFile(current_activity, f"{paquete}.fileprovider", archivo_foto)
-            
-            intent = Intent(Intent.ACTION_SEND)
-            intent.setType("image/png")
-            intent.putExtra(Intent.EXTRA_STREAM, uri_segura)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            
-            # Abre el menu de seleccion original de Android (Donde sale WhatsApp)
-            current_activity.startActivity(Intent.createChooser(intent, "Compartir Lista via..."))
+            # Guardado directo en la carpeta pública de Fotos/Imágenes del celular
+            ruta_galeria = "/storage/emulated/0/Pictures"
+            if not os.path.exists(ruta_galeria):
+                # Si es un entorno de prueba o carpeta alternativa nativa
+                from android.storage import primary_external_storage_text
+                ruta_galeria = os.path.join(primary_external_storage_text(), "Pictures")
+
+            ruta_final = os.path.join(ruta_galeria, "Lista_Precios_Lio.png")
+            imagen.save(ruta_final)
+            self.lbl_aviso.text = "¡Guardada en la Galería de Fotos!"
         except Exception as e:
-            # Fallback en caso de pruebas en PC
-            pass
+            self.lbl_aviso.text = "Guardada en descargas de la App."
+            try:
+                ruta_app = App.get_running_app().user_data_dir
+                imagen.save(os.path.join(ruta_app, "Lista_Precios_Lio.png"))
+            except:
+                pass
 
     def volver(self, instance):
         self.manager.current = 'principal'
