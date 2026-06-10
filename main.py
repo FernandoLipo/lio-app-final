@@ -5,6 +5,7 @@ from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
+from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 import sqlite3
 import os
@@ -21,16 +22,16 @@ class PantallaPrincipal(Screen):
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
 
         layout.add_widget(Label(text="LIO LIMPIEZA APP", font_size='24sp', bold=True, size_hint_y=None, height=dp(40)))
-        layout.add_widget(Label(text="INGRESAR PRODUCTO (Código)", font_size='16sp', size_hint_y=None, height=dp(25)))
+        layout.add_widget(Label(text="BUSCAR PRODUCTO (Por Nombre o Parte)", font_size='16sp', size_hint_y=None, height=dp(25)))
         
-        self.input_codigo = TextInput(multiline=False, font_size='18sp', size_hint_y=None, height=dp(45), input_type='number')
-        layout.add_widget(self.input_codigo)
+        self.input_buscar = TextInput(multiline=False, font_size='18sp', size_hint_y=None, height=dp(45))
+        layout.add_widget(self.input_buscar)
 
-        btn_buscar = Button(text="BUSCAR", font_size='18sp', bold=True, size_hint_y=None, height=dp(45), background_color=(0.2, 0.6, 0.2, 1))
+        btn_buscar = Button(text="BUSCAR", font_size='18sp', bold=True, size_hint_y=None, height=dp(45), background_color=(0.1, 0.4, 0.1, 1))
         btn_buscar.bind(on_release=self.buscar_producto)
         layout.add_widget(btn_buscar)
 
-        layout.add_widget(Label(text="DESCRIPCIÓN:", font_size='16sp', size_hint_y=None, height=dp(25)))
+        layout.add_widget(Label(text="DESCRIPCIÓN COMPLETA:", font_size='16sp', size_hint_y=None, height=dp(25)))
         self.input_nombre = TextInput(multiline=False, font_size='16sp', size_hint_y=None, height=dp(45))
         layout.add_widget(self.input_nombre)
 
@@ -43,17 +44,17 @@ class PantallaPrincipal(Screen):
 
         layout.add_widget(Widget())
 
-        self.btn_guardar = Button(text="GUARDAR NUEVO", font_size='18sp', bold=True, size_hint_y=None, height=dp(45), background_color=(0.1, 0.5, 0.8, 1))
+        self.btn_guardar = Button(text="GUARDAR NUEVO", font_size='18sp', bold=True, size_hint_y=None, height=dp(45), background_color=(0.1, 0.3, 0.5, 1))
         self.btn_guardar.bind(on_release=self.guardar_producto)
         layout.add_widget(self.btn_guardar)
 
         layout_edicion = BoxLayout(orientation='horizontal', spacing=dp(15), size_hint_y=None, height=dp(45))
         
-        self.btn_editar = Button(text="EDITAR", font_size='16sp', bold=True, background_color=(0.9, 0.6, 0.1, 1), disabled=True)
+        self.btn_editar = Button(text="EDITAR", font_size='16sp', bold=True, background_color=(0.7, 0.4, 0.1, 1), disabled=True)
         self.btn_editar.bind(on_release=self.editar_producto)
         layout_edicion.add_widget(self.btn_editar)
         
-        self.btn_borrar = Button(text="BORRAR", font_size='16sp', bold=True, background_color=(0.8, 0.2, 0.2, 1), disabled=True)
+        self.btn_borrar = Button(text="BORRAR", font_size='16sp', bold=True, background_color=(0.6, 0.1, 0.1, 1), disabled=True)
         self.btn_borrar.bind(on_release=self.borrar_producto)
         layout_edicion.add_widget(self.btn_borrar)
         layout.add_widget(layout_edicion)
@@ -67,19 +68,20 @@ class PantallaPrincipal(Screen):
     def crear_base_datos(self):
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS productos (codigo TEXT PRIMARY KEY, nombre TEXT, precio REAL)")
+        cursor.execute("CREATE TABLE IF NOT EXISTS productos (nombre TEXT PRIMARY KEY, precio REAL)")
         conn.commit()
         conn.close()
 
     def buscar_producto(self, instance):
-        codigo = self.input_codigo.text.strip()
-        if not codigo:
-            self.lbl_estado.text = "Ingresa un código para buscar."
+        criterio = self.input_buscar.text.strip()
+        if not criterio:
+            self.lbl_estado.text = "Ingresa un nombre para buscar."
             return
 
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, precio FROM productos WHERE codigo=?", (codigo,))
+        # Buscador potente: Encuentra coincidencias parciales sin importar mayusculas
+        cursor.execute("SELECT nombre, precio FROM productos WHERE nombre LIKE ? COLLATE NOCASE", (f"%{criterio}%",))
         resultado = cursor.fetchone()
         conn.close()
 
@@ -91,59 +93,58 @@ class PantallaPrincipal(Screen):
             self.btn_editar.disabled = False
             self.btn_borrar.disabled = False
         else:
-            self.input_nombre.text = ""
+            self.input_nombre.text = criterio
             self.input_precio.text = ""
-            self.lbl_estado.text = "No existe. Completá los campos para crearlo."
+            self.lbl_estado.text = "No existe. Podes crearlo con ese nombre."
             self.btn_guardar.disabled = False
             self.btn_editar.disabled = True
             self.btn_borrar.disabled = True
 
     def guardar_producto(self, instance):
-        codigo = self.input_codigo.text.strip()
         nombre = self.input_nombre.text.strip()
         precio_txt = self.input_precio.text.strip()
 
-        if not codigo or not nombre or not precio_txt:
+        if not nombre or not precio_txt:
             self.lbl_estado.text = "Error: Faltan completar datos."
             return
         try:
             conn = sqlite3.connect(self.base_datos)
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO productos VALUES (?, ?, ?)", (codigo, nombre, float(precio_txt)))
+            cursor.execute("INSERT INTO productos VALUES (?, ?)", (nombre, float(precio_txt)))
             conn.commit()
             conn.close()
             self.lbl_estado.text = "Producto guardado con éxito."
+            self.input_buscar.text = nombre
             self.buscar_producto(None)
         except Exception as e:
-            self.lbl_estado.text = "Error al guardar: Código ya existe."
+            self.lbl_estado.text = "Error al guardar: El producto ya existe."
 
     def editar_producto(self, instance):
-        codigo = self.input_codigo.text.strip()
         nombre = self.input_nombre.text.strip()
         precio_txt = self.input_precio.text.strip()
 
-        if not codigo or not nombre or not precio_txt:
+        if not nombre or not precio_txt:
             self.lbl_estado.text = "Error: Campos vacíos."
             return
 
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        cursor.execute("UPDATE productos SET nombre=?, precio=? WHERE codigo=?", (nombre, float(precio_txt), codigo))
+        cursor.execute("UPDATE productos SET precio=? WHERE nombre=?", (float(precio_txt), nombre))
         conn.commit()
         conn.close()
-        self.lbl_estado.text = "Producto modificado correctamente."
+        self.lbl_estado.text = "Precio modificado correctamente."
 
     def borrar_producto(self, instance):
-        codigo = self.input_codigo.text.strip()
-        if not codigo: return
+        nombre = self.input_nombre.text.strip()
+        if not nombre: return
 
         conn = sqlite3.connect(self.base_datos)
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM productos WHERE codigo=?", (codigo,))
+        cursor.execute("DELETE FROM productos WHERE nombre=?", (nombre,))
         conn.commit()
         conn.close()
         
-        self.input_codigo.text = ""
+        self.input_buscar.text = ""
         self.input_nombre.text = ""
         self.input_precio.text = ""
         self.lbl_estado.text = "Producto eliminado."
@@ -157,22 +158,31 @@ class PantallaPrincipal(Screen):
 
 class PantallaLista(Screen):
     def on_enter(self):
+        # Actualiza tanto la vista interna como el archivo de imagen al entrar
+        self.cargar_vista_previa_texto()
         self.generar_foto_lista()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
+        self.layout_principal = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
 
-        layout.add_widget(Label(text="VISTA PREVIA DE TU LISTA", font_size='22sp', bold=True, size_hint_y=None, height=dp(40)))
+        self.layout_principal.add_widget(Label(text="VISTA PREVIA DE TU LISTA", font_size='22sp', bold=True, size_hint_y=None, height=dp(40)))
         
-        self.lbl_info = Label(
-            text="Lista de Precios\nPedidos WhatsApp: 1123017122\n\n(Generando foto...)", 
+        self.lbl_encabezado = Label(
+            text="Lista de Precios\nPedidos WhatsApp: 1123017122", 
             font_size='16sp',
-            halign='center'
+            halign='center',
+            size_hint_y=None,
+            height=dp(50)
         )
-        layout.add_widget(self.lbl_info)
+        self.layout_principal.add_widget(self.lbl_encabezado)
 
-        layout.add_widget(Widget())
+        # Contenedor con scroll dinámico para ver todos los productos en pantalla
+        self.scroll = ScrollView(size_hint=(1, 1))
+        self.layout_productos = BoxLayout(orientation='vertical', spacing=dp(8), size_hint_y=None)
+        self.layout_productos.bind(minimum_height=self.layout_productos.setter('height'))
+        self.scroll.add_widget(self.layout_productos)
+        self.layout_principal.add_widget(self.scroll)
 
         layout_acciones = BoxLayout(orientation='horizontal', spacing=dp(15), size_hint_y=None, height=dp(50))
         
@@ -180,31 +190,46 @@ class PantallaLista(Screen):
         btn_volver.bind(on_release=self.volver)
         layout_acciones.add_widget(btn_volver)
 
-        btn_compartir = Button(text="COMPARTIR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.6, 0.2, 1))
+        btn_compartir = Button(text="COMPARTIR LISTA", font_size='16sp', bold=True, background_color=(0.1, 0.4, 0.1, 1))
         btn_compartir.bind(on_release=self.compartir_lista)
         layout_acciones.add_widget(btn_compartir)
         
-        layout.add_widget(layout_acciones)
-        self.add_widget(layout)
+        self.layout_principal.add_widget(layout_acciones)
+        self.add_widget(self.layout_principal)
+
+    def obtener_items(self):
+        ruta_app = App.get_running_app().user_data_dir
+        base_datos = os.path.join(ruta_app, "lio_limpieza.db")
+        conn = sqlite3.connect(base_datos)
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre, precio FROM productos ORDER BY nombre ASC")
+        items = cursor.fetchall()
+        conn.close()
+        return items
+
+    def cargar_vista_previa_texto(self):
+        self.layout_productos.clear_widgets()
+        items = self.obtener_items()
+        
+        if not items:
+            self.layout_productos.add_widget(Label(text="No hay productos guardados.", font_size='16sp', color=(1,0,0,1)))
+            return
+
+        for prod, precio in items:
+            fila = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(30))
+            fila.add_widget(Label(text=str(prod), font_size='16sp', halign='left', text_size=(dp(200), None)))
+            fila.add_widget(Label(text=f"${precio:,.2f}", font_size='16sp', halign='right', text_size=(dp(100), None)))
+            self.layout_productos.add_widget(fila)
 
     def generar_foto_lista(self):
         try:
-            ruta_app = App.get_running_app().user_data_dir
-            base_datos = os.path.join(ruta_app, "lio_limpieza.db")
-            
-            conn = sqlite3.connect(base_datos)
-            cursor = conn.cursor()
-            cursor.execute("SELECT nombre, precio FROM productos ORDER BY nombre ASC")
-            items = cursor.fetchall()
-            conn.close()
-
+            items = self.obtener_items()
             ancho = 720
             alto = 220 + (len(items) * 50) if items else 400
             
             imagen = Image.new("RGB", (ancho, alto), "white")
             lienzo = ImageDraw.Draw(imagen)
 
-            # Carga de fuente del sistema nativa en Android para que se lea grande y claro
             try:
                 fuente_titulo = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 36)
                 fuente_texto = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 26)
@@ -226,37 +251,39 @@ class PantallaLista(Screen):
                 lienzo.text((540, y), f"${precio:,.2f}", fill="black", font=fuente_texto)
                 y += 50
 
-            # Ruta limpia para guardar en la carpeta publica de Descargas del celu
-            try:
-                from android.storage import primary_external_storage_path
-                path_publico = primary_external_storage_path()
-                self.ruta_final_foto = os.path.join(path_publico, "Download", "Lista_Precios_Lio.png")
-            except:
-                self.ruta_final_foto = os.path.join(ruta_app, "Lista_Precios_Lio.png")
-
+            ruta_app = App.get_running_app().user_data_dir
+            self.ruta_final_foto = os.path.join(ruta_app, "Lista_Precios_Lio.png")
             imagen.save(self.ruta_final_foto)
-            self.lbl_info.text = "Lista de Precios\nPedidos WhatsApp: 1123017122\n\n¡Guardada en la carpeta Descargas!"
-        except Exception as e:
-            self.lbl_info.text = f"Error al generar foto: {str(e)}"
+        except:
+            pass
 
     def compartir_lista(self, instance):
         try:
             from jnius import autoclass
+            
+            # Clases nativas de Android necesarias para compartir de manera segura
             Intent = autoclass('android.content.Intent')
-            Uri = autoclass('android.net.Uri')
             File = autoclass('java.io.File')
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            current_activity = PythonActivity.mActivity
             
             archivo_foto = File(self.ruta_final_foto)
+            
+            # Usamos el FileProvider oficial de la app compilada para evitar brechas de seguridad
+            paquete = current_activity.getPackageName()
+            FileProvider = autoclass('androidx.core.content.FileProvider')
+            uri_segura = FileProvider.getUriForFile(current_activity, f"{paquete}.fileprovider", archivo_foto)
+            
             intent = Intent(Intent.ACTION_SEND)
             intent.setType("image/png")
+            intent.putExtra(Intent.EXTRA_STREAM, uri_segura)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             
-            # Modo seguro para parsear la URI y evitar fallos de seguridad en Android modernos
-            intent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(archivo_foto))
-            
-            current_activity = autoclass('org.kivy.android.PythonActivity').mActivity
+            # Abre el menu de seleccion original de Android (Donde sale WhatsApp)
             current_activity.startActivity(Intent.createChooser(intent, "Compartir Lista via..."))
         except Exception as e:
-            self.lbl_info.text = "Guardada en la carpeta 'Descargas' del teléfono."
+            # Fallback en caso de pruebas en PC
+            pass
 
     def volver(self, instance):
         self.manager.current = 'principal'
