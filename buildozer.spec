@@ -18,7 +18,7 @@ android.skip_update = False
 log_level = 2
 
 # Agregamos los permisos para que la app pueda guardar la lista en tu galería de fotos
-android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+android.permissions = WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, MOUNT_UNMOUNT_FILESYSTEMS
 
 # Dejamos que el sistema moderno elija las versiones por defecto compatibles
 android.api = 33
